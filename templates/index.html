@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мой скачиватель</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(90deg, #f7971e, #ffd200);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 16px;
+            min-width: 200px;
+        }
+        .input-group input::placeholder { color: #888; }
+        .input-group button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #f7971e, #ffd200);
+            color: #1a1a2e;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .input-group button:hover { transform: scale(1.02); }
+        .track-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .track-card img {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            object-fit: cover;
+        }
+        .track-info { flex: 1; }
+        .track-title { font-weight: 600; }
+        .track-artist { color: #aaa; font-size: 14px; }
+        .track-source { font-size: 12px; color: #888; }
+        .btn-download {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #f7971e;
+            color: #1a1a2e;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-download:hover { background: #ffd200; }
+        .btn-all {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #f7971e, #ffd200);
+            color: #1a1a2e;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        .status.loading { display: block; background: rgba(255,215,0,0.1); color: #ffd200; }
+        .status.error { display: block; background: rgba(255,0,0,0.1); color: #ff6b6b; }
+        .status.success { display: block; background: rgba(0,255,0,0.1); color: #7dff7d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Мой скачиватель</h1>
+        <p>Вставь ссылку на плейлист (Яндекс, VK, YouTube)</p>
+        
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="https://music.yandex.ru/...">
+            <button id="parseBtn">🔍 Найти</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let tracks = [];
+
+        document.getElementById('parseBtn').onclick = async function() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) { showStatus('Введите ссылку', 'error'); return; }
+            
+            showStatus('⏳ Загрузка...', 'loading');
+            this.disabled = true;
+            
+            try {
+                const resp = await fetch('/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error);
+                
+                tracks = data.tracks;
+                sessionId = data.session_id;
+                renderTracks(tracks);
+                showStatus(`✅ Найдено ${tracks.length} треков`, 'success');
+            } catch (e) {
+                showStatus('❌ ' + e.message, 'error');
+                document.getElementById('results').innerHTML = '';
+            }
+            this.disabled = false;
+        };
+
+        function renderTracks(tracks) {
+            let html = '';
+            tracks.forEach((track, i) => {
+                html += `
+                    <div class="track-card">
+                        <img src="${track.thumbnail || 'https://via.placeholder.com/60'}" onerror="this.src='https://via.placeholder.com/60'">
+                        <div class="track-info">
+                            <div class="track-title">${track.title}</div>
+                            <div class="track-artist">${track.artist}</div>
+                            <div class="track-source">${track.source}</div>
+                        </div>
+                        <button class="btn-download" onclick="downloadTrack(${i})">⬇</button>
+                    </div>
+                `;
+            });
+            html += `<button class="btn-all" onclick="downloadAll()">📦 Скачать все (ZIP)</button>`;
+            document.getElementById('results').innerHTML = html;
+        }
+
+        async function downloadTrack(index) {
+            try {
+                const resp = await fetch('/download_one', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, index })
+                });
+                if (!resp.ok) throw new Error('Ошибка');
+                const blob = await resp.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${tracks[index].artist} - ${tracks[index].title}.mp3`;
+                link.click();
+            } catch (e) {
+                showStatus('❌ Ошибка скачивания', 'error');
+            }
+        }
+
+        async function downloadAll() {
+            try {
+                const resp = await fetch('/download_all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                if (!resp.ok) throw new Error('Ошибка');
+                const blob = await resp.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'playlist.zip';
+                link.click();
+            } catch (e) {
+                showStatus('❌ Ошибка', 'error');
+            }
+        }
+
+        function showStatus(text, type) {
+            const el = document.getElementById('status');
+            el.textContent = text;
+            el.className = 'status ' + type;
+        }
+    </script>
+</body>
+  </html>
