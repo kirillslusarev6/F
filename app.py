@@ -5,58 +5,37 @@ import os
 import zipfile
 import tempfile
 import uuid
-import re
-import time
 
 app = Flask(__name__)
 CORS(app)
 
-# Хранилище сессий (в реальном проекте использовать Redis)
 temp_storage = {}
 
-# Определяем источник по ссылке
-def detect_source(url):
-    if "music.yandex.ru" in url:
-        return "Яндекс Музыка"
-    elif "vk.com" in url or "vkontakte.ru" in url:
-        return "VK"
-    elif "youtube.com" in url or "youtu.be" in url:
-        return "YouTube"
-    elif "soundcloud.com" in url:
-        return "SoundCloud"
-    elif "spotify.com" in url:
-        return "Spotify"
-    elif "bandcamp.com" in url:
-        return "Bandcamp"
-    elif "deezer.com" in url:
-        return "Deezer"
-    elif "apple.com" in url and "music" in url:
-        return "Apple Music"
-    elif "rutube.ru" in url:
-        return "RuTube"
-    else:
-        return "Другой источник"
-
 def extract_tracks(url):
-    """Парсит ссылку и возвращает список треков"""
     ydl_opts = {
-    'quiet': True,
-    'no_warnings': True,
-    'extract_flat': False,
-    'ignoreerrors': True,
-    'cookiefile': 'cookies.txt',  # <-- ЭТУ СТРОКУ
+        'quiet': True,
+        'no_warnings': True,
+        'ignoreerrors': True,
+        'cookiefile': 'cookies.txt',  # ← теперь точно есть
     }
     
     tracks = []
-    source = detect_source(url)
+    source = "unknown"
+    if "music.yandex.ru" in url:
+        source = "Яндекс Музыка"
+    elif "vk.com" in url:
+        source = "VK"
+    elif "youtube.com" in url or "youtu.be" in url:
+        source = "YouTube"
+    else:
+        source = "Другой источник"
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
-                return None, "Ссылка не распознана или не содержит музыки"
+                return None, "Ссылка не распознана"
             
-            # Если это плейлист
             if 'entries' in info and info['entries']:
                 for entry in info['entries']:
                     if entry and isinstance(entry, dict):
@@ -68,7 +47,6 @@ def extract_tracks(url):
                             'url': entry.get('webpage_url', url),
                             'source': source,
                         })
-            # Если это один трек
             elif isinstance(info, dict):
                 tracks.append({
                     'title': info.get('title', 'Без названия'),
@@ -79,33 +57,13 @@ def extract_tracks(url):
                     'source': source,
                 })
             else:
-                return None, "Неизвестный формат ответа"
+                return None, "Неизвестный формат"
             
             if not tracks:
                 return None, "Треки не найдены"
-            
             return tracks, None
     except Exception as e:
-        return None, f"Ошибка парсинга: {str(e)}"
-
-# Проверка на дубли
-def check_duplicates(tracks):
-    seen = {}
-    for track in tracks:
-        key = f"{track['title'].lower()}|{track['artist'].lower()}"
-        if key in seen:
-            seen[key].append(track['source'])
-            track['duplicate'] = True
-        else:
-            seen[key] = [track['source']]
-            track['duplicate'] = False
-    
-    for track in tracks:
-        key = f"{track['title'].lower()}|{track['artist'].lower()}"
-        sources = seen[key]
-        track['sources'] = " + ".join(sources) if len(sources) > 1 else sources[0]
-    
-    return tracks
+        return None, f"Ошибка: {str(e)}"
 
 @app.route('/')
 def index():
@@ -122,7 +80,6 @@ def parse_playlist():
     if error:
         return jsonify({'error': error}), 400
     
-    tracks = check_duplicates(tracks)
     session_id = str(uuid.uuid4())
     temp_storage[session_id] = tracks
     
@@ -155,6 +112,7 @@ def download_one():
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
+        'cookiefile': 'cookies.txt',
     }
     
     try:
@@ -166,8 +124,7 @@ def download_one():
         if mp3_files:
             file_path = os.path.join(temp_dir, mp3_files[0])
             return send_file(file_path, as_attachment=True, download_name=mp3_files[0])
-        else:
-            return jsonify({'error': 'Файл не найден'}), 404
+        return jsonify({'error': 'Файл не найден'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -191,6 +148,7 @@ def download_all():
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
+        'cookiefile': 'cookies.txt',
     }
     
     try:
@@ -211,5 +169,4 @@ def download_all():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Для локального запуска
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
