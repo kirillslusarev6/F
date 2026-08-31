@@ -40,10 +40,11 @@ def detect_source(url):
 def extract_tracks(url):
     """Парсит ссылку и возвращает список треков"""
     ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
-        'ignoreerrors': True,
+    'quiet': True,
+    'no_warnings': True,
+    'extract_flat': False,
+    'ignoreerrors': True,
+    'cookiefile': 'cookies.txt',  # <-- ЭТУ СТРОКУ
     }
     
     tracks = []
