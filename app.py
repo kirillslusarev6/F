@@ -5,6 +5,7 @@ import os
 import zipfile
 import tempfile
 import uuid
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -12,11 +13,30 @@ CORS(app)
 temp_storage = {}
 
 def extract_tracks(url):
+    # Настройки без cookies, с эмуляцией браузера и обходом блокировок
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
-        'cookiefile': 'cookies.txt',  # ← теперь точно есть
+        'extract_flat': False,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'referer': 'https://www.youtube.com/',
+        'add_header': [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        ],
+        # Попытка обойти капчу через разные экстракторы
+        'extractor_args': {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            },
+            'youtubemusic': {
+                'skip': ['dash'],
+            }
+        },
+        # Использование прокси (если нужно — раскомментируй)
+        # 'proxy': 'http://proxy.example.com:8080',
     }
     
     tracks = []
@@ -112,7 +132,13 @@ def download_one():
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
-        'cookiefile': 'cookies.txt',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'extractor_args': {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            }
+        }
     }
     
     try:
@@ -148,7 +174,13 @@ def download_all():
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
-        'cookiefile': 'cookies.txt',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'extractor_args': {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            }
+        }
     }
     
     try:
